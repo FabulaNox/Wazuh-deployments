@@ -29,17 +29,16 @@ output "installation_notes" {
 
     Wazuh ${var.wazuh_version} has been installed successfully!
 
-    Access the dashboard at: https://localhost:443
-
-    Default credentials are stored in: ${var.installation_path}/wazuh-passwords.txt
+    Dashboard: https://localhost:443
+    Credentials: ${var.installation_path}/wazuh-passwords.txt
 
     To retrieve the admin password:
-      sudo cat ${var.installation_path}/wazuh-passwords.txt | grep -A1 "admin"
+      cat ${var.installation_path}/wazuh-passwords.txt | grep -A1 "admin"
 
     Services:
-      - wazuh-manager:   systemctl status wazuh-manager
-      - wazuh-indexer:   systemctl status wazuh-indexer
-      - wazuh-dashboard: systemctl status wazuh-dashboard
+      systemctl status wazuh-manager
+      systemctl status wazuh-indexer
+      systemctl status wazuh-dashboard
 
   EOT
 }

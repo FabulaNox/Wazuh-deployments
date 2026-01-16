@@ -1,13 +1,5 @@
 # Wazuh version to install
 wazuh_version = "4.14"
 
-# Node names (for single-node, these are just identifiers)
-indexer_node_name   = "node-1"
-server_node_name    = "wazuh-1"
-dashboard_node_name = "dashboard"
-
 # Installation artifacts path
 installation_path = "/tmp/wazuh-install"
-
-# Optional: Set a custom admin password (leave empty for auto-generated)
-# admin_password = ""
