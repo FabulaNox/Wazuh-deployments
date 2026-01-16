@@ -1,0 +1,47 @@
+<!--
+  Custom Wazuh rules for user management script security alerts
+  Copy this file to: /var/ossec/etc/rules/local_rules.xml
+  Then restart Wazuh manager: systemctl restart wazuh-manager
+-->
+
+<group name="local,authentication,">
+
+  <!-- Base rule for wazuh-user-script logs -->
+  <rule id="100001" level="0">
+    <decoded_as>syslog</decoded_as>
+    <program_name>wazuh-user-script</program_name>
+    <description>Wazuh user management script event</description>
+  </rule>
+
+  <!-- Level 15 Alert: Multiple failed authentication attempts -->
+  <rule id="100002" level="15">
+    <if_sid>100001</if_sid>
+    <match>Multiple failed admin authentication attempts</match>
+    <description>CRITICAL: Multiple failed admin authentication attempts on Wazuh user management script - Possible brute force attack</description>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+    <group>authentication_failure,brute_force,</group>
+  </rule>
+
+  <!-- Level 15 Alert: Non-admin privilege escalation attempt -->
+  <rule id="100003" level="15">
+    <if_sid>100001</if_sid>
+    <match>privilege escalation</match>
+    <description>CRITICAL: Attempted use of non-admin account for user management - Possible privilege escalation attempt</description>
+    <mitre>
+      <id>T1548</id>
+    </mitre>
+    <group>authentication_failure,privilege_escalation,</group>
+  </rule>
+
+  <!-- Rule for custom log file monitoring -->
+  <rule id="100004" level="15">
+    <decoded_as>json</decoded_as>
+    <field name="level">15</field>
+    <field name="type">authentication_failure</field>
+    <description>CRITICAL: Wazuh user management security alert - $(description)</description>
+    <group>authentication_failure,</group>
+  </rule>
+
+</group>
