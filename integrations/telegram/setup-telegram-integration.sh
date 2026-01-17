@@ -131,7 +131,7 @@ test_telegram() {
         -H "Content-Type: application/json" \
         -d "{
             \"chat_id\": \"${CHAT_ID}\",
-            \"text\": \"\U0001F7E2 *Wazuh Integration Test*\n\nTelegram notifications configured successfully!\n\nAlert level: ${ALERT_LEVEL}+\",
+            \"text\": \"✅ *Wazuh Integration Test*\n\nTelegram notifications configured successfully!\n\nAlert level: ${ALERT_LEVEL}+\",
             \"parse_mode\": \"Markdown\"
         }" 2>&1)
 
