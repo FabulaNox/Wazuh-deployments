@@ -1,0 +1,399 @@
+<!--
+  MikroTik RouterOS Rules for Wazuh
+  Security detection rules for MikroTik router events
+
+  Install to: /var/ossec/etc/rules/mikrotik_rules.xml
+-->
+
+<group name="mikrotik,network,router,">
+
+  <!-- Base rule for MikroTik events (ID range 100100-100199) -->
+  <rule id="100100" level="0">
+    <decoded_as>mikrotik</decoded_as>
+    <description>MikroTik RouterOS event</description>
+  </rule>
+
+  <!-- ============================================ -->
+  <!-- Authentication Events -->
+  <!-- ============================================ -->
+
+  <!-- Successful login -->
+  <rule id="100101" level="3">
+    <if_sid>100100</if_sid>
+    <match>logged in</match>
+    <description>MikroTik: User login successful</description>
+    <group>authentication_success,</group>
+  </rule>
+
+  <!-- Successful logout -->
+  <rule id="100102" level="2">
+    <if_sid>100100</if_sid>
+    <match>logged out</match>
+    <description>MikroTik: User logout</description>
+    <group>authentication,</group>
+  </rule>
+
+  <!-- Failed login attempt -->
+  <rule id="100103" level="5">
+    <if_sid>100100</if_sid>
+    <match>login failure</match>
+    <description>MikroTik: Failed login attempt</description>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+    <group>authentication_failed,</group>
+  </rule>
+
+  <!-- Multiple failed logins (brute force) -->
+  <rule id="100104" level="10" frequency="5" timeframe="120">
+    <if_matched_sid>100103</if_matched_sid>
+    <same_source_ip/>
+    <description>MikroTik: Multiple failed login attempts - possible brute force</description>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+    <group>authentication_failed,brute_force,</group>
+  </rule>
+
+  <!-- Login from new/unusual source -->
+  <rule id="100105" level="6">
+    <if_sid>100101</if_sid>
+    <match>via ssh|via winbox|via web</match>
+    <description>MikroTik: Administrative login detected</description>
+    <group>authentication_success,admin_login,</group>
+  </rule>
+
+  <!-- ============================================ -->
+  <!-- ISP/WAN Connection Events -->
+  <!-- ============================================ -->
+
+  <!-- PPPoE connected -->
+  <rule id="100110" level="3">
+    <if_sid>100100</if_sid>
+    <match>pppoe,|ppp,</match>
+    <match>connected</match>
+    <description>MikroTik: ISP connection established</description>
+    <group>network,connectivity,</group>
+  </rule>
+
+  <!-- PPPoE disconnected -->
+  <rule id="100111" level="7">
+    <if_sid>100100</if_sid>
+    <match>pppoe,|ppp,</match>
+    <match>disconnected|terminated|lost</match>
+    <description>MikroTik: ISP connection lost</description>
+    <group>network,connectivity,connection_lost,</group>
+  </rule>
+
+  <!-- Interface link down -->
+  <rule id="100112" level="6">
+    <if_sid>100100</if_sid>
+    <match>link down</match>
+    <description>MikroTik: Network interface link down</description>
+    <group>network,interface,</group>
+  </rule>
+
+  <!-- Interface link up -->
+  <rule id="100113" level="3">
+    <if_sid>100100</if_sid>
+    <match>link up</match>
+    <description>MikroTik: Network interface link up</description>
+    <group>network,interface,</group>
+  </rule>
+
+  <!-- WAN interface down (high priority) -->
+  <rule id="100114" level="10">
+    <if_sid>100112</if_sid>
+    <match>ether1|wan|pppoe|lte</match>
+    <description>MikroTik: WAN interface down - Internet connectivity lost</description>
+    <group>network,connectivity,connection_lost,</group>
+  </rule>
+
+  <!-- Multiple disconnections (unstable connection) -->
+  <rule id="100115" level="8" frequency="3" timeframe="3600">
+    <if_matched_sid>100111</if_matched_sid>
+    <description>MikroTik: Multiple ISP disconnections - unstable connection</description>
+    <group>network,connectivity,</group>
+  </rule>
+
+  <!-- ============================================ -->
+  <!-- Firewall Events -->
+  <!-- ============================================ -->
+
+  <!-- Firewall drop -->
+  <rule id="100120" level="3">
+    <if_sid>100100</if_sid>
+    <match>firewall,</match>
+    <match>drop|reject</match>
+    <description>MikroTik: Firewall blocked connection</description>
+    <group>firewall,drop,</group>
+  </rule>
+
+  <!-- Port scan detection (multiple drops from same source) -->
+  <rule id="100121" level="8" frequency="10" timeframe="60">
+    <if_matched_sid>100120</if_matched_sid>
+    <same_source_ip/>
+    <description>MikroTik: Possible port scan detected</description>
+    <mitre>
+      <id>T1046</id>
+    </mitre>
+    <group>firewall,port_scan,</group>
+  </rule>
+
+  <!-- Firewall rule changed -->
+  <rule id="100122" level="7">
+    <if_sid>100100</if_sid>
+    <match>firewall</match>
+    <match>changed by|added|removed</match>
+    <description>MikroTik: Firewall rule modified</description>
+    <mitre>
+      <id>T1562</id>
+    </mitre>
+    <group>firewall,config_change,</group>
+  </rule>
+
+  <!-- ============================================ -->
+  <!-- Configuration Changes -->
+  <!-- ============================================ -->
+
+  <!-- System configuration changed -->
+  <rule id="100130" level="5">
+    <if_sid>100100</if_sid>
+    <match>changed by</match>
+    <description>MikroTik: Configuration changed</description>
+    <group>config_change,</group>
+  </rule>
+
+  <!-- User account modified -->
+  <rule id="100131" level="8">
+    <if_sid>100100</if_sid>
+    <match>user</match>
+    <match>added|removed|changed|modified</match>
+    <description>MikroTik: User account modified</description>
+    <mitre>
+      <id>T1136</id>
+    </mitre>
+    <group>config_change,user_management,</group>
+  </rule>
+
+  <!-- DNS settings changed -->
+  <rule id="100132" level="6">
+    <if_sid>100100</if_sid>
+    <match>dns</match>
+    <match>changed|set|added</match>
+    <description>MikroTik: DNS configuration changed</description>
+    <group>config_change,dns,</group>
+  </rule>
+
+  <!-- Identity/hostname changed -->
+  <rule id="100133" level="7">
+    <if_sid>100100</if_sid>
+    <match>identity</match>
+    <match>changed</match>
+    <description>MikroTik: System identity changed</description>
+    <group>config_change,</group>
+  </rule>
+
+  <!-- ============================================ -->
+  <!-- DHCP Events -->
+  <!-- ============================================ -->
+
+  <!-- DHCP lease assigned (new device on network) -->
+  <rule id="100140" level="5">
+    <if_sid>100100</if_sid>
+    <match>dhcp,info</match>
+    <match>assigned</match>
+    <description>MikroTik: New IP assigned to device - $(srcip)</description>
+    <group>dhcp,new_device,</group>
+  </rule>
+
+  <!-- DHCP lease deassigned -->
+  <rule id="100141" level="3">
+    <if_sid>100100</if_sid>
+    <match>dhcp,</match>
+    <match>deassigned</match>
+    <description>MikroTik: DHCP lease released</description>
+    <group>dhcp,</group>
+  </rule>
+
+  <!-- Multiple DHCP assignments to same MAC (IP change detection) -->
+  <rule id="100142" level="6" frequency="2" timeframe="300">
+    <if_matched_sid>100140</if_matched_sid>
+    <same_field>mac</same_field>
+    <description>MikroTik: Device received new IP address (possible IP change)</description>
+    <group>dhcp,ip_change,</group>
+  </rule>
+
+  <!-- New unknown device on network (first time seen) -->
+  <rule id="100143" level="7">
+    <if_sid>100140</if_sid>
+    <description>MikroTik: New device joined network via DHCP</description>
+    <group>dhcp,new_device,network_discovery,</group>
+  </rule>
+
+  <!-- ============================================ -->
+  <!-- NAT / Port Forwarding Events -->
+  <!-- ============================================ -->
+
+  <!-- NAT rule added -->
+  <rule id="100180" level="10">
+    <if_sid>100100</if_sid>
+    <match>nat</match>
+    <match>added</match>
+    <description>MikroTik: NAT/Port forwarding rule ADDED - verify this change!</description>
+    <mitre>
+      <id>T1090</id>
+    </mitre>
+    <group>nat,port_forward,config_change,</group>
+  </rule>
+
+  <!-- NAT rule removed -->
+  <rule id="100181" level="8">
+    <if_sid>100100</if_sid>
+    <match>nat</match>
+    <match>removed</match>
+    <description>MikroTik: NAT/Port forwarding rule REMOVED</description>
+    <group>nat,port_forward,config_change,</group>
+  </rule>
+
+  <!-- NAT rule changed -->
+  <rule id="100182" level="9">
+    <if_sid>100100</if_sid>
+    <match>nat</match>
+    <match>changed</match>
+    <description>MikroTik: NAT/Port forwarding rule MODIFIED</description>
+    <mitre>
+      <id>T1090</id>
+    </mitre>
+    <group>nat,port_forward,config_change,</group>
+  </rule>
+
+  <!-- Dst-nat (port forward) specific -->
+  <rule id="100183" level="10">
+    <if_sid>100100</if_sid>
+    <match>dst-nat</match>
+    <match>added|changed</match>
+    <description>MikroTik: Port forwarding rule changed - external access modified!</description>
+    <mitre>
+      <id>T1090</id>
+    </mitre>
+    <group>nat,port_forward,config_change,</group>
+  </rule>
+
+  <!-- ============================================ -->
+  <!-- VPN Events (OpenVPN) -->
+  <!-- ============================================ -->
+
+  <!-- OpenVPN connection -->
+  <rule id="100185" level="5">
+    <if_sid>100100</if_sid>
+    <match>ovpn</match>
+    <match>connected|logged in</match>
+    <description>MikroTik: OpenVPN client connected</description>
+    <group>vpn,openvpn,authentication_success,</group>
+  </rule>
+
+  <!-- OpenVPN disconnection -->
+  <rule id="100186" level="4">
+    <if_sid>100100</if_sid>
+    <match>ovpn</match>
+    <match>disconnected|logged out</match>
+    <description>MikroTik: OpenVPN client disconnected</description>
+    <group>vpn,openvpn,</group>
+  </rule>
+
+  <!-- OpenVPN auth failure -->
+  <rule id="100187" level="8">
+    <if_sid>100100</if_sid>
+    <match>ovpn</match>
+    <match>failed|rejected|denied</match>
+    <description>MikroTik: OpenVPN authentication failed</description>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+    <group>vpn,openvpn,authentication_failed,</group>
+  </rule>
+
+  <!-- ============================================ -->
+  <!-- Wireless Events -->
+  <!-- ============================================ -->
+
+  <!-- Wireless client connected -->
+  <rule id="100150" level="3">
+    <if_sid>100100</if_sid>
+    <match>wireless,</match>
+    <match>connected|registered</match>
+    <description>MikroTik: Wireless client connected</description>
+    <group>wireless,</group>
+  </rule>
+
+  <!-- Wireless client disconnected -->
+  <rule id="100151" level="3">
+    <if_sid>100100</if_sid>
+    <match>wireless,</match>
+    <match>disconnected</match>
+    <description>MikroTik: Wireless client disconnected</description>
+    <group>wireless,</group>
+  </rule>
+
+  <!-- ============================================ -->
+  <!-- Critical/Error Events -->
+  <!-- ============================================ -->
+
+  <!-- Critical error -->
+  <rule id="100160" level="12">
+    <if_sid>100100</if_sid>
+    <match>critical,</match>
+    <description>MikroTik: Critical error</description>
+    <group>system,critical,</group>
+  </rule>
+
+  <!-- Error message -->
+  <rule id="100161" level="7">
+    <if_sid>100100</if_sid>
+    <match>error,</match>
+    <description>MikroTik: System error</description>
+    <group>system,error,</group>
+  </rule>
+
+  <!-- Warning message -->
+  <rule id="100162" level="4">
+    <if_sid>100100</if_sid>
+    <match>warning,</match>
+    <description>MikroTik: System warning</description>
+    <group>system,warning,</group>
+  </rule>
+
+  <!-- System reboot -->
+  <rule id="100163" level="8">
+    <if_sid>100100</if_sid>
+    <match>router rebooted|system,reboot|startup</match>
+    <description>MikroTik: Router rebooted</description>
+    <group>system,reboot,</group>
+  </rule>
+
+  <!-- ============================================ -->
+  <!-- Script Events -->
+  <!-- ============================================ -->
+
+  <!-- Script executed -->
+  <rule id="100170" level="4">
+    <if_sid>100100</if_sid>
+    <match>script,</match>
+    <description>MikroTik: Script executed</description>
+    <group>script,</group>
+  </rule>
+
+  <!-- Scheduled script added -->
+  <rule id="100171" level="6">
+    <if_sid>100100</if_sid>
+    <match>scheduler</match>
+    <match>added</match>
+    <description>MikroTik: Scheduled task added</description>
+    <mitre>
+      <id>T1053</id>
+    </mitre>
+    <group>script,scheduled_task,</group>
+  </rule>
+
+</group>

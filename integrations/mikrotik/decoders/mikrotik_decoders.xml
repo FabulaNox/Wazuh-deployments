@@ -1,0 +1,128 @@
+<!--
+  MikroTik RouterOS Decoders for Wazuh
+  Parses syslog messages from MikroTik routers (RouterOS 7.x)
+
+  Install to: /var/ossec/etc/decoders/mikrotik_decoders.xml
+
+  OSSEC Regex Reference:
+  \w = [a-zA-Z0-9_]
+  \d = [0-9]
+  \s = spaces
+  \S = non-space (NOT supported - use \. or specific chars)
+  \. = any character
+  \.+ = one or more of any character
+-->
+
+<!-- Base MikroTik decoder - matches typical syslog from MikroTik -->
+<decoder name="mikrotik">
+  <prematch>^\w+ \d+ \d+:\d+:\d+ </prematch>
+</decoder>
+
+<!-- Extract basic fields -->
+<decoder name="mikrotik-fields">
+  <parent>mikrotik</parent>
+  <regex offset="after_parent">^(\d+.\d+.\d+.\d+) (\w+),\.+: (.+)$</regex>
+  <order>srcip,topic,message</order>
+</decoder>
+
+<!-- Login success via any method -->
+<decoder name="mikrotik-login">
+  <parent>mikrotik</parent>
+  <prematch>logged in from</prematch>
+  <regex>user (\w+) logged in from (\d+.\d+.\d+.\d+) via (\w+)</regex>
+  <order>user,srcip,protocol</order>
+</decoder>
+
+<!-- Logout -->
+<decoder name="mikrotik-logout">
+  <parent>mikrotik</parent>
+  <prematch>logged out from</prematch>
+  <regex>user (\w+) logged out from (\d+.\d+.\d+.\d+) via (\w+)</regex>
+  <order>user,srcip,protocol</order>
+</decoder>
+
+<!-- Login failure -->
+<decoder name="mikrotik-login-failed">
+  <parent>mikrotik</parent>
+  <prematch>login failure</prematch>
+  <regex>login failure for user (\w+) from (\d+.\d+.\d+.\d+) via (\w+)</regex>
+  <order>user,srcip,protocol</order>
+</decoder>
+
+<!-- Interface link up -->
+<decoder name="mikrotik-link-up">
+  <parent>mikrotik</parent>
+  <prematch>link up</prematch>
+  <regex>(\w+) link up</regex>
+  <order>interface</order>
+</decoder>
+
+<!-- Interface link down -->
+<decoder name="mikrotik-link-down">
+  <parent>mikrotik</parent>
+  <prematch>link down</prematch>
+  <regex>(\w+) link down</regex>
+  <order>interface</order>
+</decoder>
+
+<!-- PPPoE connected -->
+<decoder name="mikrotik-pppoe-connected">
+  <parent>mikrotik</parent>
+  <prematch>connected</prematch>
+  <regex>(\w+) connected</regex>
+  <order>interface</order>
+</decoder>
+
+<!-- PPPoE disconnected -->
+<decoder name="mikrotik-pppoe-disconnected">
+  <parent>mikrotik</parent>
+  <prematch>terminated|disconnected</prematch>
+  <regex>(\w+) terminated|(\w+) disconnected</regex>
+  <order>interface</order>
+</decoder>
+
+<!-- DHCP assigned -->
+<decoder name="mikrotik-dhcp">
+  <parent>mikrotik</parent>
+  <prematch>assigned</prematch>
+  <regex>assigned (\d+.\d+.\d+.\d+) to (\w+:\w+:\w+:\w+:\w+:\w+)</regex>
+  <order>srcip,mac</order>
+</decoder>
+
+<!-- Config change -->
+<decoder name="mikrotik-config">
+  <parent>mikrotik</parent>
+  <prematch>changed by</prematch>
+  <regex>(\w+) changed by (\w+)</regex>
+  <order>setting,user</order>
+</decoder>
+
+<!-- System reboot -->
+<decoder name="mikrotik-reboot">
+  <parent>mikrotik</parent>
+  <prematch>router rebooted</prematch>
+</decoder>
+
+<!-- Critical message -->
+<decoder name="mikrotik-critical">
+  <parent>mikrotik</parent>
+  <prematch>critical,</prematch>
+  <regex>critical,(\w+): (.+)$</regex>
+  <order>topic,message</order>
+</decoder>
+
+<!-- Error message -->
+<decoder name="mikrotik-error">
+  <parent>mikrotik</parent>
+  <prematch>error,</prematch>
+  <regex>error,(\w+): (.+)$</regex>
+  <order>topic,message</order>
+</decoder>
+
+<!-- Warning message -->
+<decoder name="mikrotik-warning">
+  <parent>mikrotik</parent>
+  <prematch>warning,</prematch>
+  <regex>warning,(\w+): (.+)$</regex>
+  <order>topic,message</order>
+</decoder>
