@@ -242,7 +242,24 @@ After deployment, Terraform displays:
 terraform destroy
 ```
 
-This runs the official Wazuh uninstall script, cleanly removing all components.
+This runs the custom cleanup script which removes:
+- All custom integrations (MikroTik decoders, rules, syslog config)
+- User management security rules and logs
+- Firewall rules (UFW/firewalld)
+- Configuration backups
+- Wazuh installation (via official uninstall script)
+
+#### Manual Cleanup
+
+To clean up custom configurations without Terraform:
+
+```bash
+# Remove everything including Wazuh
+sudo ./scripts/cleanup-custom-configs.sh
+
+# Remove only custom configs, keep Wazuh installed
+sudo ./scripts/cleanup-custom-configs.sh --keep-wazuh
+```
 
 #### File Structure
 
@@ -515,8 +532,14 @@ Wazuh-deployments/
 ├── scripts/
 │   ├── create-wazuh-user.sh       # User management script
 │   ├── install-security-rules.sh  # Install custom Wazuh rules
+│   ├── cleanup-custom-configs.sh  # Remove all custom configs
 │   └── wazuh-rules/
 │       └── local_rules.xml        # Custom alert rules
+├── integrations/
+│   └── mikrotik/                  # MikroTik router integration
+│       ├── setup-mikrotik-integration.sh
+│       ├── decoders/
+│       └── rules/
 ├── docker/                   # (Coming soon)
 ├── kubernetes/               # (Coming soon)
 └── ansible/                  # (Coming soon)
