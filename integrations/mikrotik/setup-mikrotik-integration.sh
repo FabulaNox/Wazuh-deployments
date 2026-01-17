@@ -178,29 +178,49 @@ check_wazuh() {
 install_decoders() {
     log_info "Installing MikroTik decoders..."
 
-    if [[ -f "$SCRIPT_DIR/decoders/mikrotik_decoders.xml" ]]; then
-        cp "$SCRIPT_DIR/decoders/mikrotik_decoders.xml" "$DECODERS_DIR/"
-        chown wazuh:wazuh "$DECODERS_DIR/mikrotik_decoders.xml"
-        chmod 640 "$DECODERS_DIR/mikrotik_decoders.xml"
-        log_success "Decoders installed"
-    else
+    if [[ ! -f "$SCRIPT_DIR/decoders/mikrotik_decoders.xml" ]]; then
         log_error "Decoder file not found: $SCRIPT_DIR/decoders/mikrotik_decoders.xml"
         exit 1
     fi
+
+    local dest="$DECODERS_DIR/mikrotik_decoders.xml"
+    if [[ -f "$dest" ]]; then
+        # Check if files are identical
+        if cmp -s "$SCRIPT_DIR/decoders/mikrotik_decoders.xml" "$dest"; then
+            log_warn "Decoders already installed (no changes)"
+            return 0
+        fi
+        log_info "Updating existing decoders..."
+    fi
+
+    cp "$SCRIPT_DIR/decoders/mikrotik_decoders.xml" "$dest"
+    chown wazuh:wazuh "$dest"
+    chmod 640 "$dest"
+    log_success "Decoders installed"
 }
 
 install_rules() {
     log_info "Installing MikroTik rules..."
 
-    if [[ -f "$SCRIPT_DIR/rules/mikrotik_rules.xml" ]]; then
-        cp "$SCRIPT_DIR/rules/mikrotik_rules.xml" "$RULES_DIR/"
-        chown wazuh:wazuh "$RULES_DIR/mikrotik_rules.xml"
-        chmod 640 "$RULES_DIR/mikrotik_rules.xml"
-        log_success "Rules installed"
-    else
+    if [[ ! -f "$SCRIPT_DIR/rules/mikrotik_rules.xml" ]]; then
         log_error "Rules file not found: $SCRIPT_DIR/rules/mikrotik_rules.xml"
         exit 1
     fi
+
+    local dest="$RULES_DIR/mikrotik_rules.xml"
+    if [[ -f "$dest" ]]; then
+        # Check if files are identical
+        if cmp -s "$SCRIPT_DIR/rules/mikrotik_rules.xml" "$dest"; then
+            log_warn "Rules already installed (no changes)"
+            return 0
+        fi
+        log_info "Updating existing rules..."
+    fi
+
+    cp "$SCRIPT_DIR/rules/mikrotik_rules.xml" "$dest"
+    chown wazuh:wazuh "$dest"
+    chmod 640 "$dest"
+    log_success "Rules installed"
 }
 
 configure_syslog() {
@@ -338,18 +358,38 @@ configure_mikrotik_api() {
     # Add logging rules for each topic
     local topics=("critical" "error" "warning" "system" "firewall" "interface" "ppp" "pppoe" "dhcp" "wireless" "account" "ovpn")
 
-    log_info "Adding logging rules..."
-    for topic in "${topics[@]}"; do
-        # Check if rule exists
-        local exists=$(curl -s -k -u "$auth" "$api_url/system/logging" | grep -o "\"topics\":\"$topic\".*\"action\":\"wazuh\"")
+    log_info "Checking logging rules..."
+    local existing_rules=$(curl -s -k -u "$auth" "$api_url/system/logging")
+    local created=0
+    local skipped=0
 
-        if [[ -z "$exists" ]]; then
-            curl -s -k -u "$auth" -X POST "$api_url/system/logging" \
-                -H "Content-Type: application/json" \
-                -d "{\"action\": \"wazuh\", \"topics\": \"$topic\"}" > /dev/null 2>&1
+    for topic in "${topics[@]}"; do
+        # Check if rule with this topic AND wazuh action already exists
+        # Handle both field orderings in JSON response
+        if echo "$existing_rules" | grep -q "\"action\":\"wazuh\"" && \
+           echo "$existing_rules" | grep -q "\"topics\":\"$topic\""; then
+            # More precise check: find entries that have both
+            local has_rule=$(echo "$existing_rules" | grep -o '{[^}]*}' | grep "\"action\":\"wazuh\"" | grep "\"topics\":\"$topic\"")
+            if [[ -n "$has_rule" ]]; then
+                ((skipped++))
+                continue
+            fi
         fi
+
+        curl -s -k -u "$auth" -X POST "$api_url/system/logging" \
+            -H "Content-Type: application/json" \
+            -d "{\"action\": \"wazuh\", \"topics\": \"$topic\"}" > /dev/null 2>&1
+        ((created++))
     done
-    log_success "Logging rules configured for ${#topics[@]} topics"
+
+    if [[ $skipped -gt 0 ]]; then
+        log_warn "Skipped $skipped existing rules"
+    fi
+    if [[ $created -gt 0 ]]; then
+        log_success "Created $created new logging rules"
+    else
+        log_success "All ${#topics[@]} logging rules already configured"
+    fi
 
     return 0
 }
