@@ -29,9 +29,17 @@ resource "null_resource" "wazuh_all_in_one" {
   provisioner "local-exec" {
     when    = destroy
     command = <<-EOT
-      curl -sO https://packages.wazuh.com/4.14/wazuh-install.sh
-      sudo bash wazuh-install.sh --uninstall 2>/dev/null || true
-      rm -f wazuh-install.sh
+      CLEANUP_SCRIPT="${path.module}/../../scripts/cleanup-custom-configs.sh"
+
+      if [[ -f "$CLEANUP_SCRIPT" ]]; then
+        echo "Running custom cleanup script..."
+        sudo bash "$CLEANUP_SCRIPT"
+      else
+        echo "Cleanup script not found, running standard uninstall..."
+        curl -sO https://packages.wazuh.com/4.14/wazuh-install.sh
+        sudo bash wazuh-install.sh --uninstall 2>/dev/null || true
+        rm -f wazuh-install.sh
+      fi
     EOT
   }
 }
