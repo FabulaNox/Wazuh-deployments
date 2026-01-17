@@ -15,6 +15,9 @@ A collection of deployment methods for running [Wazuh](https://wazuh.com/) in a 
 - [Prerequisites](#prerequisites)
 - [Deployment Methods](#deployment-methods)
   - [Terraform (Local)](#terraform-local)
+- [Integrations](#integrations)
+  - [MikroTik Router](#mikrotik-router)
+  - [Telegram Notifications](#telegram-notifications)
 - [User Management](#user-management)
 - [Security Features](#security-features)
 - [Troubleshooting](#troubleshooting)
@@ -271,6 +274,84 @@ terraform/local/
 ├── versions.tf                # Terraform version constraints
 └── terraform.tfvars.example   # Example configuration
 ```
+
+---
+
+## Integrations
+
+This repository includes ready-to-use integrations for extending Wazuh functionality.
+
+### MikroTik Router
+
+Collect and analyze logs from MikroTik RouterOS devices.
+
+```bash
+cd integrations/mikrotik
+sudo ./setup-mikrotik-integration.sh
+```
+
+**Features:**
+- Syslog forwarding configuration
+- 25+ detection rules (auth, firewall, DHCP, VPN, etc.)
+- REST API auto-configuration (RouterOS 7.1+)
+- MITRE ATT&CK mappings
+
+**Detected Events:**
+
+| Category | Examples | Alert Level |
+|----------|----------|-------------|
+| Authentication | Login success/failure, brute force | 3-10 |
+| Firewall | Blocked connections, rule changes, port scans | 3-8 |
+| Network | PPPoE connect/disconnect, interface changes | 3-10 |
+| NAT/Port Forward | Rule added/modified/removed | 8-10 |
+| DHCP | New device, IP changes | 3-7 |
+| OpenVPN | Connection, auth failure | 4-8 |
+
+See [integrations/mikrotik/README.md](integrations/mikrotik/README.md) for full documentation.
+
+### Telegram Notifications
+
+Receive real-time alert notifications via Telegram.
+
+```bash
+cd integrations/telegram
+sudo ./setup-telegram-integration.sh
+```
+
+**Prerequisites:**
+1. Create a bot via [@BotFather](https://t.me/BotFather) → get Bot Token
+2. Get your Chat ID from [@userinfobot](https://t.me/userinfobot)
+
+**Features:**
+- Severity-based emoji indicators (🚨 Critical, 🔴 High, 🟠 Medium, 🟡 Low)
+- MITRE ATT&CK technique mapping
+- Configurable minimum alert level (default: 7+)
+- Supports personal and group chats
+
+**Example notification:**
+```
+🟠 Wazuh Alert - MEDIUM
+
+Rule: 100122 (Level 7)
+Description: MikroTik: Firewall rule modified
+Agent: MikroTik
+Source: 192.168.88.1
+Groups: firewall, config_change
+MITRE: T1562
+
+2026-01-17T10:30:00+0200
+```
+
+**Log locations:**
+```bash
+# Integration errors
+sudo tail -f /var/ossec/logs/integrations.log
+
+# Alerts triggering notifications
+sudo tail -f /var/ossec/logs/alerts/alerts.log
+```
+
+See [integrations/telegram/README.md](integrations/telegram/README.md) for full documentation.
 
 ---
 
@@ -536,10 +617,13 @@ Wazuh-deployments/
 │   └── wazuh-rules/
 │       └── local_rules.xml        # Custom alert rules
 ├── integrations/
-│   └── mikrotik/                  # MikroTik router integration
-│       ├── setup-mikrotik-integration.sh
-│       ├── decoders/
-│       └── rules/
+│   ├── mikrotik/                  # MikroTik router log collection
+│   │   ├── setup-mikrotik-integration.sh
+│   │   ├── decoders/
+│   │   └── rules/
+│   └── telegram/                  # Telegram alert notifications
+│       ├── setup-telegram-integration.sh
+│       └── custom-telegram.py
 ├── docker/                   # (Coming soon)
 ├── kubernetes/               # (Coming soon)
 └── ansible/                  # (Coming soon)
