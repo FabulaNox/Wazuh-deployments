@@ -3,3 +3,18 @@ wazuh_version = "4.14"
 
 # Installation artifacts path
 installation_path = "/tmp/wazuh-install"
+
+# MikroTik Integration (optional)
+# Set to true to deploy MikroTik log collection
+mikrotik_integration_enabled = false
+
+# MikroTik router IP address
+mikrotik_router_ip = "192.168.88.1"
+
+# Use MikroTik REST API for automatic router configuration (RouterOS 7.1+)
+# If false, manual commands will be printed instead
+mikrotik_use_api = false
+
+# MikroTik credentials (only needed if mikrotik_use_api = true)
+# mikrotik_username = "admin"
+# mikrotik_password = "your-router-password"
