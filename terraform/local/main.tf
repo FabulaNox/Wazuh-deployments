@@ -108,3 +108,32 @@ resource "null_resource" "mikrotik_integration" {
     EOT
   }
 }
+
+# Telegram Integration (optional)
+resource "null_resource" "telegram_integration" {
+  count      = var.telegram_integration_enabled ? 1 : 0
+  depends_on = [null_resource.wazuh_all_in_one]
+
+  triggers = {
+    chat_id     = var.telegram_chat_id
+    alert_level = var.telegram_alert_level
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      SCRIPT_PATH="${path.module}/../../integrations/telegram/setup-telegram-integration.sh"
+
+      if [[ ! -f "$SCRIPT_PATH" ]]; then
+        echo "ERROR: Telegram integration script not found at $SCRIPT_PATH"
+        exit 1
+      fi
+
+      chmod +x "$SCRIPT_PATH"
+
+      sudo bash "$SCRIPT_PATH" \
+        --token "${var.telegram_bot_token}" \
+        --chat-id "${var.telegram_chat_id}" \
+        --level "${var.telegram_alert_level}" <<< "Y"
+    EOT
+  }
+}

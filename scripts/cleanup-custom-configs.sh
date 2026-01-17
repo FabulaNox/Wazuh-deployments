@@ -153,6 +153,44 @@ PYEOF
 fi
 
 # ============================================
+# Remove Telegram Integration
+# ============================================
+log_info "Removing Telegram integration..."
+
+# Remove integration script
+if [[ -f "/var/ossec/integrations/custom-telegram.py" ]]; then
+    rm -f "/var/ossec/integrations/custom-telegram.py"
+    log_success "Removed Telegram integration script"
+else
+    log_warn "Telegram integration script not found (skipped)"
+fi
+
+# Remove Telegram config from ossec.conf
+if [[ -f "/var/ossec/etc/ossec.conf" ]]; then
+    if grep -q "custom-telegram" "/var/ossec/etc/ossec.conf"; then
+        log_info "Removing Telegram config from ossec.conf..."
+        python3 << 'PYEOF'
+import re
+
+conf_path = '/var/ossec/etc/ossec.conf'
+with open(conf_path, 'r') as f:
+    content = f.read()
+
+# Remove Telegram integration block
+pattern = r'\s*<!-- Telegram Alert Notifications -->.*?<integration>.*?custom-telegram.*?</integration>'
+content = re.sub(pattern, '', content, flags=re.DOTALL)
+
+# Clean up extra blank lines
+content = re.sub(r'\n{3,}', '\n\n', content)
+
+with open(conf_path, 'w') as f:
+    f.write(content)
+PYEOF
+        log_success "Removed Telegram config"
+    fi
+fi
+
+# ============================================
 # Remove ossec.conf backups
 # ============================================
 log_info "Removing ossec.conf backups..."
@@ -231,6 +269,7 @@ echo -e "${GREEN}═════════════════════
 echo ""
 echo "Removed:"
 echo "  • MikroTik integration (decoders, rules, syslog config)"
+echo "  • Telegram integration (script, ossec.conf config)"
 echo "  • User management security rules"
 echo "  • Firewall rules (UFW/firewalld)"
 echo "  • Configuration backups"

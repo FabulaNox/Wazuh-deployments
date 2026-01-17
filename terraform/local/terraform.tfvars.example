@@ -18,3 +18,16 @@ mikrotik_use_api = false
 # MikroTik credentials (only needed if mikrotik_use_api = true)
 # mikrotik_username = "admin"
 # mikrotik_password = "your-router-password"
+
+# Telegram Integration (optional)
+# Set to true to enable alert notifications via Telegram
+telegram_integration_enabled = false
+
+# Get token from @BotFather on Telegram
+# telegram_bot_token = "123456789:ABC-DEF..."
+
+# Get chat ID from @userinfobot (personal) or API (groups)
+# telegram_chat_id = "-1001234567890"
+
+# Minimum alert level to notify (1-15, default: 7)
+telegram_alert_level = 7

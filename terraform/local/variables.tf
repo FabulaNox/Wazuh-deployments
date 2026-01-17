@@ -41,3 +41,29 @@ variable "mikrotik_password" {
   default     = ""
   sensitive   = true
 }
+
+# Telegram Integration Variables
+variable "telegram_integration_enabled" {
+  description = "Enable Telegram alert notifications"
+  type        = bool
+  default     = false
+}
+
+variable "telegram_bot_token" {
+  description = "Telegram Bot Token (from @BotFather)"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "telegram_chat_id" {
+  description = "Telegram Chat ID (user or group)"
+  type        = string
+  default     = ""
+}
+
+variable "telegram_alert_level" {
+  description = "Minimum alert level to send to Telegram (1-15)"
+  type        = number
+  default     = 7
+}
