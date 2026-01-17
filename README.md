@@ -11,6 +11,7 @@ A collection of deployment methods for running [Wazuh](https://wazuh.com/) in a 
 - [About This Project](#about-this-project)
 - [Why Wazuh?](#why-wazuh)
 - [Architecture Decisions](#architecture-decisions)
+  - [Manager Host Visibility](#manager-host-visibility-important)
 - [Prerequisites](#prerequisites)
 - [Deployment Methods](#deployment-methods)
   - [Terraform (Local)](#terraform-local)
@@ -105,6 +106,52 @@ The included scripts provide:
 - **Automation** - Consistent user creation across deployments
 - **Learning Tool** - Understand Wazuh RBAC by examining the code
 - **Ease of Access** - I will want to explore role permissions and creations in further depth
+
+### Manager Host Visibility (Important!)
+
+When running Wazuh all-in-one, the **manager server monitors itself** through a built-in agent with **ID 000**. This has important implications:
+
+#### What You Should Know
+
+| Aspect | Details |
+|--------|---------|
+| **Built-in Agent** | The manager includes an internal agent (ID: 000) - no separate agent installation needed |
+| **Never Install Agent on Manager** | Installing an agent on the manager will **remove the manager and API components** |
+| **Dashboard Visibility** | Manager events appear under `agent.id: 000` in the Discover dashboard |
+| **Vulnerability Detection** | Disabled for manager by default - must be enabled manually |
+
+#### Enabling Vulnerability Detection on Manager
+
+By default, the Vulnerability Detection module does **not** scan the manager host. To enable it:
+
+```bash
+# Edit internal options
+sudo nano /var/ossec/etc/internal_options.conf
+
+# Find and change this line from 1 to 0:
+vulnerability-detection.disable_scan_manager=0
+
+# Restart the manager
+sudo systemctl restart wazuh-manager
+```
+
+#### Viewing Manager Events
+
+To see security events from the Wazuh server itself:
+
+1. Go to **Discover** in the Wazuh dashboard
+2. Add a filter: `agent.id: 000`
+3. All events from the manager host will be displayed
+
+#### Why This Matters
+
+When you start adding agents to monitor other endpoints, the dashboard naturally focuses on those agents. The manager (ID: 000) can get "lost" among many agents. Remember to:
+
+- Include `agent.id: 000` when reviewing overall security posture
+- Enable vulnerability scanning on the manager (see above)
+- Monitor the manager's own logs at `/var/ossec/logs/ossec.log`
+
+> **Reference**: [Wazuh Manager Documentation](https://documentation.wazuh.com/current/user-manual/manager/wazuh-manager.html), [Vulnerability Detection Configuration](https://documentation.wazuh.com/current/user-manual/capabilities/vulnerability-detection/configuring-scans.html)
 
 ---
 
