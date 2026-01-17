@@ -144,10 +144,17 @@ prompt_config() {
 
     if [[ "$config_method" != "2" ]]; then
         USE_API=true
-        read -p "MikroTik username [admin]: " ROUTER_USER
-        ROUTER_USER=${ROUTER_USER:-admin}
-        read -s -p "MikroTik password: " ROUTER_PASS
         echo ""
+        echo -e "${YELLOW}MikroTik Credentials${NC}"
+        read -p "Username [admin]: " input_user
+        ROUTER_USER=${input_user:-admin}
+        read -s -p "Password for '$ROUTER_USER': " ROUTER_PASS
+        echo ""
+
+        if [[ -z "$ROUTER_PASS" ]]; then
+            log_error "Password is required for API configuration"
+            exit 1
+        fi
     fi
 
     echo ""
