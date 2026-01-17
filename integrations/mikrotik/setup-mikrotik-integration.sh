@@ -78,15 +78,45 @@ EOF
 }
 
 detect_wazuh_ip() {
-    # Try to get the IP on the same subnet as the router
-    if [[ -n "$ROUTER_IP" ]]; then
-        local router_subnet=$(echo "$ROUTER_IP" | cut -d'.' -f1-3)
-        WAZUH_IP=$(ip -4 addr show | grep -oP "(?<=inet )${router_subnet}\.\d+" | head -1)
+    # Skip if already set via command line
+    if [[ -n "$WAZUH_IP" ]]; then
+        return 0
     fi
 
-    # Fallback to primary IP
-    if [[ -z "$WAZUH_IP" ]]; then
-        WAZUH_IP=$(hostname -I | awk '{print $1}')
+    # Method 1: Check if Wazuh manager is running and get IP from ossec.conf
+    if [[ -f "$OSSEC_CONF" ]]; then
+        # Try to extract local_ip from existing remote config
+        local conf_ip=$(grep -oP '(?<=<local_ip>)[^<]+' "$OSSEC_CONF" 2>/dev/null | head -1)
+        if [[ -n "$conf_ip" && "$conf_ip" != "0.0.0.0" ]]; then
+            WAZUH_IP="$conf_ip"
+            log_info "Detected Wazuh IP from ossec.conf: $WAZUH_IP"
+            return 0
+        fi
+    fi
+
+    # Method 2: Get IP on same subnet as router (for local network setups)
+    if [[ -n "$ROUTER_IP" ]]; then
+        local router_subnet=$(echo "$ROUTER_IP" | cut -d'.' -f1-3)
+        local subnet_ip=$(ip -4 addr show | grep -oP "(?<=inet )${router_subnet}\.\d+" | head -1)
+        if [[ -n "$subnet_ip" ]]; then
+            WAZUH_IP="$subnet_ip"
+            log_info "Detected Wazuh IP from network interface: $WAZUH_IP"
+            return 0
+        fi
+    fi
+
+    # Method 3: Get IP of interface with default route
+    local default_ip=$(ip route get 1.1.1.1 2>/dev/null | grep -oP '(?<=src )\d+\.\d+\.\d+\.\d+' | head -1)
+    if [[ -n "$default_ip" ]]; then
+        WAZUH_IP="$default_ip"
+        log_info "Detected Wazuh IP from default route: $WAZUH_IP"
+        return 0
+    fi
+
+    # Method 4: Fallback to primary IP from hostname
+    WAZUH_IP=$(hostname -I | awk '{print $1}')
+    if [[ -n "$WAZUH_IP" ]]; then
+        log_info "Detected Wazuh IP from hostname: $WAZUH_IP"
     fi
 }
 

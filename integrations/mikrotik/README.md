@@ -64,7 +64,7 @@ Configures Wazuh and prints commands to paste into your router.
 | Option | Description |
 |--------|-------------|
 | `-r, --router IP` | MikroTik router IP address |
-| `-w, --wazuh IP` | Wazuh server IP (auto-detected) |
+| `-w, --wazuh IP` | Wazuh server IP (auto-detected from ossec.conf, network interface, or default route) |
 | `-u, --user USER` | MikroTik username (default: admin) |
 | `-p, --password PASS` | MikroTik password (for API) |
 | `-a, --api` | Use MikroTik REST API |
