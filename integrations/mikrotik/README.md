@@ -49,7 +49,9 @@ sudo ./setup-mikrotik-integration.sh -r 192.168.88.1 -u admin -p YourPassword -a
 This automatically:
 1. Configures Wazuh (decoders, rules, syslog)
 2. Connects to MikroTik via REST API
-3. Creates logging action and rules on the router
+3. Creates or updates logging action and rules on the router
+
+**Note:** Re-running the script will update an existing "wazuh" logging action with the correct Wazuh server IP. This is useful when migrating between Wazuh servers or VMs.
 
 ### Option 3: Manual Router Config
 
@@ -164,10 +166,12 @@ integrations/mikrotik/
 | 100110-100115 | ISP/WAN connectivity |
 | 100120-100122 | Firewall |
 | 100130-100133 | Configuration changes |
-| 100140-100141 | DHCP |
+| 100140-100142 | DHCP |
 | 100150-100151 | Wireless |
 | 100160-100163 | System errors/warnings |
 | 100170-100171 | Scripts |
+| 100180-100183 | NAT/Port forwarding |
+| 100185-100187 | OpenVPN |
 
 ## Troubleshooting
 
@@ -229,8 +233,26 @@ sudo systemctl restart wazuh-manager
 | T1136 | 100131 | Create Account |
 | T1053 | 100171 | Scheduled Task |
 
+## Technical Notes
+
+### Decoder Regex
+
+Decoders use PCRE2 regex (`type="pcre2"`) for standard regex syntax. This provides better pattern matching than the legacy OSSEC regex.
+
+### Rule Logic
+
+Rules use PCRE2 lookahead for AND conditions:
+```xml
+<!-- This matches logs containing BOTH "ovpn" AND "connected" -->
+<regex type="pcre2">(?=.*ovpn)(?=.*connected)</regex>
+```
+
+**Important:** Multiple `<match>` tags in Wazuh rules are OR logic, not AND. Use regex lookahead for AND conditions.
+
 ## References
 
 - [Wazuh Syslog Documentation](https://documentation.wazuh.com/current/user-manual/capabilities/log-data-collection/syslog.html)
 - [MikroTik Logging Documentation](https://help.mikrotik.com/docs/display/ROS/Log)
 - [Wazuh MikroTik Blog Post](https://wazuh.com/blog/monitoring-network-devices/)
+- [angolo40/WazuhMikrotik](https://github.com/angolo40/WazuhMikrotik) - Reference decoder implementation
+- [xArshh/Wazuh-MikroTik-Integration](https://github.com/xArshh/Wazuh-MikroTik-Integration) - Reference rules and active response

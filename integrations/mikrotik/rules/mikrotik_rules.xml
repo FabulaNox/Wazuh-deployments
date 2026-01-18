@@ -3,6 +3,8 @@
   Security detection rules for MikroTik router events
 
   Install to: /var/ossec/etc/rules/mikrotik_rules.xml
+
+  NOTE: Use regex with lookahead for AND logic. Multiple <match> tags are OR, not AND!
 -->
 
 <group name="mikrotik,network,router,">
@@ -55,7 +57,7 @@
     <group>authentication_failed,brute_force,</group>
   </rule>
 
-  <!-- Login from new/unusual source -->
+  <!-- Administrative login via ssh/winbox/web -->
   <rule id="100105" level="6">
     <if_sid>100101</if_sid>
     <match>via ssh|via winbox|via web</match>
@@ -67,20 +69,18 @@
   <!-- ISP/WAN Connection Events -->
   <!-- ============================================ -->
 
-  <!-- PPPoE connected -->
+  <!-- PPPoE/PPP connected (requires both ppp AND connected) -->
   <rule id="100110" level="3">
     <if_sid>100100</if_sid>
-    <match>pppoe,|ppp,</match>
-    <match>connected</match>
+    <regex type="pcre2">(?=.*(?:pppoe|ppp))(?=.*connected)</regex>
     <description>MikroTik: ISP connection established</description>
     <group>network,connectivity,</group>
   </rule>
 
-  <!-- PPPoE disconnected -->
+  <!-- PPPoE/PPP disconnected -->
   <rule id="100111" level="7">
     <if_sid>100100</if_sid>
-    <match>pppoe,|ppp,</match>
-    <match>disconnected|terminated|lost</match>
+    <regex type="pcre2">(?=.*(?:pppoe|ppp))(?=.*(?:disconnected|terminated|lost))</regex>
     <description>MikroTik: ISP connection lost</description>
     <group>network,connectivity,connection_lost,</group>
   </rule>
@@ -120,11 +120,10 @@
   <!-- Firewall Events -->
   <!-- ============================================ -->
 
-  <!-- Firewall drop -->
+  <!-- Firewall drop (requires firewall AND drop/reject) -->
   <rule id="100120" level="3">
     <if_sid>100100</if_sid>
-    <match>firewall,</match>
-    <match>drop|reject</match>
+    <regex type="pcre2">(?=.*firewall)(?=.*(?:drop|reject))</regex>
     <description>MikroTik: Firewall blocked connection</description>
     <group>firewall,drop,</group>
   </rule>
@@ -143,8 +142,7 @@
   <!-- Firewall rule changed -->
   <rule id="100122" level="7">
     <if_sid>100100</if_sid>
-    <match>firewall</match>
-    <match>changed by|added|removed</match>
+    <regex type="pcre2">(?=.*(?:firewall|filter))(?=.*(?:changed|added|removed))</regex>
     <description>MikroTik: Firewall rule modified</description>
     <mitre>
       <id>T1562</id>
@@ -167,8 +165,7 @@
   <!-- User account modified -->
   <rule id="100131" level="8">
     <if_sid>100100</if_sid>
-    <match>user</match>
-    <match>added|removed|changed|modified</match>
+    <regex type="pcre2">user\s+\S+\s+(?:added|removed|changed|modified|password)</regex>
     <description>MikroTik: User account modified</description>
     <mitre>
       <id>T1136</id>
@@ -179,8 +176,7 @@
   <!-- DNS settings changed -->
   <rule id="100132" level="6">
     <if_sid>100100</if_sid>
-    <match>dns</match>
-    <match>changed|set|added</match>
+    <regex type="pcre2">(?=.*dns)(?=.*(?:changed|set|added))</regex>
     <description>MikroTik: DNS configuration changed</description>
     <group>config_change,dns,</group>
   </rule>
@@ -188,8 +184,7 @@
   <!-- Identity/hostname changed -->
   <rule id="100133" level="7">
     <if_sid>100100</if_sid>
-    <match>identity</match>
-    <match>changed</match>
+    <regex type="pcre2">(?=.*identity)(?=.*changed)</regex>
     <description>MikroTik: System identity changed</description>
     <group>config_change,</group>
   </rule>
@@ -198,37 +193,28 @@
   <!-- DHCP Events -->
   <!-- ============================================ -->
 
-  <!-- DHCP lease assigned (new device on network) -->
+  <!-- DHCP lease assigned -->
   <rule id="100140" level="5">
     <if_sid>100100</if_sid>
-    <match>dhcp,info</match>
-    <match>assigned</match>
-    <description>MikroTik: New IP assigned to device - $(srcip)</description>
+    <regex type="pcre2">(?=.*dhcp)(?=.*assigned)</regex>
+    <description>MikroTik: DHCP lease assigned</description>
     <group>dhcp,new_device,</group>
   </rule>
 
   <!-- DHCP lease deassigned -->
   <rule id="100141" level="3">
     <if_sid>100100</if_sid>
-    <match>dhcp,</match>
-    <match>deassigned</match>
+    <regex type="pcre2">(?=.*dhcp)(?=.*deassigned)</regex>
     <description>MikroTik: DHCP lease released</description>
     <group>dhcp,</group>
   </rule>
 
-  <!-- Multiple DHCP assignments to same MAC (IP change detection) -->
+  <!-- Multiple DHCP assignments to same MAC -->
   <rule id="100142" level="6" frequency="2" timeframe="300">
     <if_matched_sid>100140</if_matched_sid>
     <same_field>mac</same_field>
-    <description>MikroTik: Device received new IP address (possible IP change)</description>
+    <description>MikroTik: Device received new IP address</description>
     <group>dhcp,ip_change,</group>
-  </rule>
-
-  <!-- New unknown device on network (first time seen) -->
-  <rule id="100143" level="7">
-    <if_sid>100140</if_sid>
-    <description>MikroTik: New device joined network via DHCP</description>
-    <group>dhcp,new_device,network_discovery,</group>
   </rule>
 
   <!-- ============================================ -->
@@ -238,9 +224,8 @@
   <!-- NAT rule added -->
   <rule id="100180" level="10">
     <if_sid>100100</if_sid>
-    <match>nat</match>
-    <match>added</match>
-    <description>MikroTik: NAT/Port forwarding rule ADDED - verify this change!</description>
+    <regex type="pcre2">(?=.*nat)(?=.*added)</regex>
+    <description>MikroTik: NAT/Port forwarding rule ADDED</description>
     <mitre>
       <id>T1090</id>
     </mitre>
@@ -250,8 +235,7 @@
   <!-- NAT rule removed -->
   <rule id="100181" level="8">
     <if_sid>100100</if_sid>
-    <match>nat</match>
-    <match>removed</match>
+    <regex type="pcre2">(?=.*nat)(?=.*removed)</regex>
     <description>MikroTik: NAT/Port forwarding rule REMOVED</description>
     <group>nat,port_forward,config_change,</group>
   </rule>
@@ -259,8 +243,7 @@
   <!-- NAT rule changed -->
   <rule id="100182" level="9">
     <if_sid>100100</if_sid>
-    <match>nat</match>
-    <match>changed</match>
+    <regex type="pcre2">(?=.*nat)(?=.*changed)</regex>
     <description>MikroTik: NAT/Port forwarding rule MODIFIED</description>
     <mitre>
       <id>T1090</id>
@@ -271,9 +254,8 @@
   <!-- Dst-nat (port forward) specific -->
   <rule id="100183" level="10">
     <if_sid>100100</if_sid>
-    <match>dst-nat</match>
-    <match>added|changed</match>
-    <description>MikroTik: Port forwarding rule changed - external access modified!</description>
+    <regex type="pcre2">(?=.*dst-nat)(?=.*(?:added|changed))</regex>
+    <description>MikroTik: Port forwarding rule changed</description>
     <mitre>
       <id>T1090</id>
     </mitre>
@@ -284,11 +266,10 @@
   <!-- VPN Events (OpenVPN) -->
   <!-- ============================================ -->
 
-  <!-- OpenVPN connection -->
+  <!-- OpenVPN connection (requires ovpn AND connected/logged in) -->
   <rule id="100185" level="5">
     <if_sid>100100</if_sid>
-    <match>ovpn</match>
-    <match>connected|logged in</match>
+    <regex type="pcre2">(?=.*ovpn)(?=.*(?:connected|logged in))</regex>
     <description>MikroTik: OpenVPN client connected</description>
     <group>vpn,openvpn,authentication_success,</group>
   </rule>
@@ -296,8 +277,7 @@
   <!-- OpenVPN disconnection -->
   <rule id="100186" level="4">
     <if_sid>100100</if_sid>
-    <match>ovpn</match>
-    <match>disconnected|logged out</match>
+    <regex type="pcre2">(?=.*ovpn)(?=.*(?:disconnected|logged out))</regex>
     <description>MikroTik: OpenVPN client disconnected</description>
     <group>vpn,openvpn,</group>
   </rule>
@@ -305,8 +285,7 @@
   <!-- OpenVPN auth failure -->
   <rule id="100187" level="8">
     <if_sid>100100</if_sid>
-    <match>ovpn</match>
-    <match>failed|rejected|denied</match>
+    <regex type="pcre2">(?=.*ovpn)(?=.*(?:failed|rejected|denied))</regex>
     <description>MikroTik: OpenVPN authentication failed</description>
     <mitre>
       <id>T1110</id>
@@ -321,8 +300,7 @@
   <!-- Wireless client connected -->
   <rule id="100150" level="3">
     <if_sid>100100</if_sid>
-    <match>wireless,</match>
-    <match>connected|registered</match>
+    <regex type="pcre2">(?=.*wireless)(?=.*(?:connected|registered))</regex>
     <description>MikroTik: Wireless client connected</description>
     <group>wireless,</group>
   </rule>
@@ -330,8 +308,7 @@
   <!-- Wireless client disconnected -->
   <rule id="100151" level="3">
     <if_sid>100100</if_sid>
-    <match>wireless,</match>
-    <match>disconnected</match>
+    <regex type="pcre2">(?=.*wireless)(?=.*disconnected)</regex>
     <description>MikroTik: Wireless client disconnected</description>
     <group>wireless,</group>
   </rule>
@@ -343,7 +320,7 @@
   <!-- Critical error -->
   <rule id="100160" level="12">
     <if_sid>100100</if_sid>
-    <match>critical,</match>
+    <match>,critical</match>
     <description>MikroTik: Critical error</description>
     <group>system,critical,</group>
   </rule>
@@ -351,7 +328,7 @@
   <!-- Error message -->
   <rule id="100161" level="7">
     <if_sid>100100</if_sid>
-    <match>error,</match>
+    <match>,error</match>
     <description>MikroTik: System error</description>
     <group>system,error,</group>
   </rule>
@@ -359,7 +336,7 @@
   <!-- Warning message -->
   <rule id="100162" level="4">
     <if_sid>100100</if_sid>
-    <match>warning,</match>
+    <match>,warning</match>
     <description>MikroTik: System warning</description>
     <group>system,warning,</group>
   </rule>
@@ -387,8 +364,7 @@
   <!-- Scheduled script added -->
   <rule id="100171" level="6">
     <if_sid>100100</if_sid>
-    <match>scheduler</match>
-    <match>added</match>
+    <regex type="pcre2">(?=.*scheduler)(?=.*added)</regex>
     <description>MikroTik: Scheduled task added</description>
     <mitre>
       <id>T1053</id>

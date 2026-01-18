@@ -336,12 +336,40 @@ configure_mikrotik_api() {
     log_success "Connected to router: $router_name"
 
     # Check if logging action already exists
-    local existing=$(curl -s -k -u "$auth" "$api_url/system/logging/action" | grep -o '"name":"wazuh"')
+    local actions_response=$(curl -s -k -u "$auth" "$api_url/system/logging/action")
+    local existing_id=$(echo "$actions_response" | grep -o '{\s*"[^}]*"name":"wazuh"[^}]*}' | grep -o '".id":"[^"]*"' | cut -d'"' -f4)
 
-    if [[ -n "$existing" ]]; then
-        log_warn "Logging action 'wazuh' already exists"
+    # Fallback: try different JSON format
+    if [[ -z "$existing_id" ]]; then
+        existing_id=$(echo "$actions_response" | grep -o '{[^}]*"name":"wazuh"[^}]*}' | grep -o '"\.id":"[^"]*"' | cut -d'"' -f4)
+    fi
+
+    if [[ -n "$existing_id" ]]; then
+        # Update existing logging action with correct IP
+        log_info "Updating existing logging action 'wazuh' (ID: $existing_id)..."
+        local update_response=$(curl -s -k -u "$auth" -X PATCH "$api_url/system/logging/action/$existing_id" \
+            -H "Content-Type: application/json" \
+            -d "{
+                \"remote\": \"$WAZUH_IP\",
+                \"remote-port\": \"514\",
+                \"src-address\": \"$ROUTER_IP\"
+            }" 2>&1)
+
+        if echo "$update_response" | grep -q "error"; then
+            log_warn "Failed to update via PATCH, trying PUT..."
+            curl -s -k -u "$auth" -X PUT "$api_url/system/logging/action/$existing_id" \
+                -H "Content-Type: application/json" \
+                -d "{
+                    \"name\": \"wazuh\",
+                    \"target\": \"remote\",
+                    \"remote\": \"$WAZUH_IP\",
+                    \"remote-port\": \"514\",
+                    \"src-address\": \"$ROUTER_IP\"
+                }" > /dev/null
+        fi
+        log_success "Logging action updated (remote=$WAZUH_IP)"
     else
-        # Create logging action
+        # Create new logging action
         log_info "Creating logging action..."
         curl -s -k -u "$auth" -X POST "$api_url/system/logging/action" \
             -H "Content-Type: application/json" \

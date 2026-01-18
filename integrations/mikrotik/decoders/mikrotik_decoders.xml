@@ -4,125 +4,148 @@
 
   Install to: /var/ossec/etc/decoders/mikrotik_decoders.xml
 
-  OSSEC Regex Reference:
-  \w = [a-zA-Z0-9_]
-  \d = [0-9]
-  \s = spaces
-  \S = non-space (NOT supported - use \. or specific chars)
-  \. = any character
-  \.+ = one or more of any character
+  Based on: https://github.com/angolo40/WazuhMikrotik
+            https://github.com/xArshh/Wazuh-MikroTik-Integration
+
+  Structure: Base decoder matches MikroTik format, child decoders extract specific fields
 -->
 
-<!-- Base MikroTik decoder - matches typical syslog from MikroTik -->
+<!-- ============================================ -->
+<!-- Base Decoder - All MikroTik logs match this -->
+<!-- ============================================ -->
+
 <decoder name="mikrotik">
-  <prematch>^\w+ \d+ \d+:\d+:\d+ </prematch>
+  <prematch type="pcre2">^\w+,\w+ </prematch>
+  <regex type="pcre2">^(\w+),(\w+) (.+)$</regex>
+  <order>topic,status,message</order>
 </decoder>
 
-<!-- Extract basic fields -->
-<decoder name="mikrotik-fields">
-  <parent>mikrotik</parent>
-  <regex offset="after_parent">^(\d+.\d+.\d+.\d+) (\w+),\.+: (.+)$</regex>
-  <order>srcip,topic,message</order>
-</decoder>
+<!-- ============================================ -->
+<!-- Child Decoders - Extract specific fields    -->
+<!-- ============================================ -->
 
 <!-- Login success via any method -->
 <decoder name="mikrotik-login">
   <parent>mikrotik</parent>
-  <prematch>logged in from</prematch>
-  <regex>user (\w+) logged in from (\d+.\d+.\d+.\d+) via (\w+)</regex>
+  <prematch type="pcre2">user \S+ logged in from</prematch>
+  <regex type="pcre2">user (\S+) logged in from (\S+) via (\S+)</regex>
   <order>user,srcip,protocol</order>
 </decoder>
 
 <!-- Logout -->
 <decoder name="mikrotik-logout">
   <parent>mikrotik</parent>
-  <prematch>logged out from</prematch>
-  <regex>user (\w+) logged out from (\d+.\d+.\d+.\d+) via (\w+)</regex>
+  <prematch type="pcre2">user \S+ logged out from</prematch>
+  <regex type="pcre2">user (\S+) logged out from (\S+) via (\S+)</regex>
   <order>user,srcip,protocol</order>
 </decoder>
 
 <!-- Login failure -->
 <decoder name="mikrotik-login-failed">
   <parent>mikrotik</parent>
-  <prematch>login failure</prematch>
-  <regex>login failure for user (\w+) from (\d+.\d+.\d+.\d+) via (\w+)</regex>
+  <prematch type="pcre2">login failure for user</prematch>
+  <regex type="pcre2">login failure for user (\S+) from (\S+) via (\S+)</regex>
   <order>user,srcip,protocol</order>
+</decoder>
+
+<!-- Filter rule changes -->
+<decoder name="mikrotik-filter-rule">
+  <parent>mikrotik</parent>
+  <prematch type="pcre2">filter rule (changed|removed|added) by</prematch>
+  <regex type="pcre2">filter rule (changed|removed|added) by (\S+):(\S+)@(\S+)</regex>
+  <order>action,method,user,srcip</order>
+</decoder>
+
+<!-- NAT rule changes -->
+<decoder name="mikrotik-nat-rule">
+  <parent>mikrotik</parent>
+  <prematch type="pcre2">nat rule (changed|removed|added) by</prematch>
+  <regex type="pcre2">nat rule (changed|removed|added) by (\S+):(\S+)@(\S+)</regex>
+  <order>action,method,user,srcip</order>
+</decoder>
+
+<!-- Log rule changes -->
+<decoder name="mikrotik-log-rule">
+  <parent>mikrotik</parent>
+  <prematch type="pcre2">log rule (added|changed|removed) by</prematch>
+  <regex type="pcre2">log rule (added|changed|removed) by (\S+):(\S+)@(\S+)</regex>
+  <order>action,method,user,srcip</order>
+</decoder>
+
+<!-- User account changes -->
+<decoder name="mikrotik-user-change">
+  <parent>mikrotik</parent>
+  <prematch type="pcre2">user \S+ (added|password changed|removed) by</prematch>
+  <regex type="pcre2">user (\S+) (added|password changed|removed) by (\S+):(\S+)@(\S+)</regex>
+  <order>target_user,action,method,user,srcip</order>
 </decoder>
 
 <!-- Interface link up -->
 <decoder name="mikrotik-link-up">
   <parent>mikrotik</parent>
-  <prematch>link up</prematch>
-  <regex>(\w+) link up</regex>
+  <prematch type="pcre2">\S+ link up</prematch>
+  <regex type="pcre2">(\S+) link up</regex>
   <order>interface</order>
 </decoder>
 
 <!-- Interface link down -->
 <decoder name="mikrotik-link-down">
   <parent>mikrotik</parent>
-  <prematch>link down</prematch>
-  <regex>(\w+) link down</regex>
+  <prematch type="pcre2">\S+ link down</prematch>
+  <regex type="pcre2">(\S+) link down</regex>
   <order>interface</order>
 </decoder>
 
 <!-- PPPoE connected -->
 <decoder name="mikrotik-pppoe-connected">
   <parent>mikrotik</parent>
-  <prematch>connected</prematch>
-  <regex>(\w+) connected</regex>
+  <prematch type="pcre2">\S+ connected$</prematch>
+  <regex type="pcre2">(\S+) connected</regex>
   <order>interface</order>
 </decoder>
 
 <!-- PPPoE disconnected -->
 <decoder name="mikrotik-pppoe-disconnected">
   <parent>mikrotik</parent>
-  <prematch>terminated|disconnected</prematch>
-  <regex>(\w+) terminated|(\w+) disconnected</regex>
-  <order>interface</order>
+  <prematch type="pcre2">(terminated|disconnected)</prematch>
+  <regex type="pcre2">(\S+) (terminated|disconnected)</regex>
+  <order>interface,action</order>
 </decoder>
 
-<!-- DHCP assigned -->
+<!-- DHCP lease assigned -->
 <decoder name="mikrotik-dhcp">
   <parent>mikrotik</parent>
-  <prematch>assigned</prematch>
-  <regex>assigned (\d+.\d+.\d+.\d+) to (\w+:\w+:\w+:\w+:\w+:\w+)</regex>
+  <prematch type="pcre2">assigned \d+\.\d+\.\d+\.\d+ to</prematch>
+  <regex type="pcre2">assigned (\d+\.\d+\.\d+\.\d+) to ([0-9A-Fa-f:]+)</regex>
   <order>srcip,mac</order>
 </decoder>
 
-<!-- Config change -->
-<decoder name="mikrotik-config">
+<!-- OpenVPN events -->
+<decoder name="mikrotik-ovpn">
   <parent>mikrotik</parent>
-  <prematch>changed by</prematch>
-  <regex>(\w+) changed by (\w+)</regex>
-  <order>setting,user</order>
+  <prematch type="pcre2">\S+ logged (in|out), \d+\.\d+\.\d+\.\d+ from</prematch>
+  <regex type="pcre2">(\S+) logged (in|out), (\d+\.\d+\.\d+\.\d+) from (\d+\.\d+\.\d+\.\d+)</regex>
+  <order>user,action,local_ip,srcip</order>
+</decoder>
+
+<!-- WireGuard events -->
+<decoder name="mikrotik-wireguard">
+  <parent>mikrotik</parent>
+  <prematch type="pcre2">wireguard user \S+ logged</prematch>
+  <regex type="pcre2">wireguard user (\S+) logged (\S+) from (\S+)</regex>
+  <order>user,action,srcip</order>
 </decoder>
 
 <!-- System reboot -->
 <decoder name="mikrotik-reboot">
   <parent>mikrotik</parent>
-  <prematch>router rebooted</prematch>
+  <prematch type="pcre2">router rebooted</prematch>
 </decoder>
 
-<!-- Critical message -->
-<decoder name="mikrotik-critical">
+<!-- Script execution -->
+<decoder name="mikrotik-script">
   <parent>mikrotik</parent>
-  <prematch>critical,</prematch>
-  <regex>critical,(\w+): (.+)$</regex>
-  <order>topic,message</order>
-</decoder>
-
-<!-- Error message -->
-<decoder name="mikrotik-error">
-  <parent>mikrotik</parent>
-  <prematch>error,</prematch>
-  <regex>error,(\w+): (.+)$</regex>
-  <order>topic,message</order>
-</decoder>
-
-<!-- Warning message -->
-<decoder name="mikrotik-warning">
-  <parent>mikrotik</parent>
-  <prematch>warning,</prematch>
-  <regex>warning,(\w+): (.+)$</regex>
-  <order>topic,message</order>
+  <prematch type="pcre2">^script,</prematch>
+  <regex type="pcre2">^script,(\w+) (.+)$</regex>
+  <order>status,message</order>
 </decoder>
