@@ -5,18 +5,66 @@
 #
 # Install to: /var/ossec/integrations/custom-telegram.py
 #
+# Configuration is read from /var/ossec/etc/telegram.conf
+# which can be updated dynamically via the telegram-bot-listener
+#
 
 import sys
+import os
 import json
 import requests
 from datetime import datetime
 
-# Read alert from stdin (Wazuh passes alert as JSON)
+CONFIG_FILE = "/var/ossec/etc/telegram.conf"
+
+
+def load_config():
+    """Load configuration from file"""
+    default_config = {
+        "level": 7,
+        "muted": False,
+        "muted_until": None
+    }
+
+    try:
+        if os.path.exists(CONFIG_FILE):
+            with open(CONFIG_FILE, 'r') as f:
+                config = json.load(f)
+                # Check mute expiration
+                if config.get("muted") and config.get("muted_until"):
+                    if datetime.now().timestamp() > config["muted_until"]:
+                        config["muted"] = False
+                return config
+    except Exception:
+        pass
+
+    return default_config
+
+
 def main():
-    # Read configuration and alert from stdin
+    # Load dynamic configuration
+    config = load_config()
+
+    # Read alert from file (Wazuh passes path as first argument)
     alert_file = open(sys.argv[1])
     alert_json = json.load(alert_file)
     alert_file.close()
+
+    # Extract alert data
+    alert = alert_json.get("alert", alert_json)
+    rule = alert.get("rule", {})
+    level = rule.get("level", 0)
+
+    # Check if muted
+    if config.get("muted", False):
+        sys.exit(0)  # Silently exit, don't send
+
+    # Check alert level against configured threshold
+    # Note: Wazuh already filters by level in ossec.conf, but this allows
+    # dynamic adjustment without restarting Wazuh
+    config_level = config.get("level", 7)
+    if level < config_level:
+        sys.exit(0)  # Below threshold, don't send
 
     # Get Telegram settings from options (passed via ossec.conf)
     hook_url = sys.argv[3] if len(sys.argv) > 3 else None
@@ -29,6 +77,7 @@ def main():
     # Or simple format: <TOKEN>:<CHAT_ID>
     if hook_url.startswith("https://"):
         api_url = hook_url
+        chat_id = None
     else:
         # Simple format: TOKEN:CHAT_ID
         parts = hook_url.rsplit(":", 1)
@@ -37,15 +86,11 @@ def main():
         token, chat_id = parts
         api_url = f"https://api.telegram.org/bot{token}/sendMessage"
 
-    # Extract alert data
-    alert = alert_json.get("alert", alert_json)
-
-    rule = alert.get("rule", {})
+    # Extract remaining alert data
     agent = alert.get("agent", {})
     data = alert.get("data", {})
     location = alert.get("location", "Unknown")
 
-    level = rule.get("level", 0)
     description = rule.get("description", "No description")
     rule_id = rule.get("id", "N/A")
     groups = ", ".join(rule.get("groups", []))
@@ -113,8 +158,7 @@ def main():
         }
         response = requests.post(api_url, data=payload, timeout=10)
     else:
-        # Need to extract chat_id from simple format
-        chat_id = hook_url.rsplit(":", 1)[1]
+        # Need chat_id from simple format
         payload = {
             "chat_id": chat_id,
             "text": message,

@@ -21,11 +21,13 @@ NC='\033[0m'
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OSSEC_CONF="/var/ossec/etc/ossec.conf"
 INTEGRATIONS_DIR="/var/ossec/integrations"
+CONFIG_DIR="/var/ossec/etc"
 
 # Default values
 BOT_TOKEN=""
 CHAT_ID=""
 ALERT_LEVEL=7
+INSTALL_LISTENER=true
 
 log_info()    { echo -e "${CYAN}[INFO]${NC} $1"; }
 log_success() { echo -e "${GREEN}[✓]${NC} $1"; }
@@ -51,6 +53,7 @@ OPTIONS:
   -t, --token TOKEN     Telegram Bot Token (from @BotFather)
   -c, --chat-id ID      Telegram Chat ID (user or group)
   -l, --level LEVEL     Minimum alert level to notify (default: 7)
+  --no-listener         Don't install the bot command listener
   -h, --help            Show this help message
 
 EXAMPLES:
@@ -65,6 +68,15 @@ HOW TO GET CREDENTIALS:
   2. Chat ID: Message @userinfobot or @getidsbot to get your ID
      For groups: Add bot to group, send a message, then use:
      curl "https://api.telegram.org/bot<TOKEN>/getUpdates"
+
+BOT COMMANDS (when listener is enabled):
+  /level <N>  - Set minimum alert level (1-15)
+  /level      - Show current level
+  /mute       - Mute all alerts
+  /mute <min> - Mute for N minutes
+  /unmute     - Resume alerts
+  /status     - Show current configuration
+  /help       - Show available commands
 
 EOF
     exit 0
@@ -122,6 +134,15 @@ prompt_config() {
     ALERT_LEVEL=${input_level:-$ALERT_LEVEL}
 
     echo ""
+    echo "The bot listener allows you to change settings via Telegram commands"
+    echo "(e.g., /level 5, /mute, /unmute) without restarting Wazuh."
+    echo ""
+    read -p "Install bot command listener? [Y/n]: " install_listener
+    if [[ "${install_listener,,}" == "n" ]]; then
+        INSTALL_LISTENER=false
+    fi
+
+    echo ""
 }
 
 test_telegram() {
@@ -131,7 +152,7 @@ test_telegram() {
         -H "Content-Type: application/json" \
         -d "{
             \"chat_id\": \"${CHAT_ID}\",
-            \"text\": \"✅ *Wazuh Integration Test*\n\nTelegram notifications configured successfully!\n\nAlert level: ${ALERT_LEVEL}+\",
+            \"text\": \"✅ *Wazuh Integration Test*\n\nTelegram notifications configured successfully!\n\nAlert level: ${ALERT_LEVEL}+\n\nBot commands: $(if $INSTALL_LISTENER; then echo 'Enabled'; else echo 'Disabled'; fi)\",
             \"parse_mode\": \"Markdown\"
         }" 2>&1)
 
@@ -166,8 +187,79 @@ install_integration() {
     fi
 }
 
+install_bot_listener() {
+    if ! $INSTALL_LISTENER; then
+        return 0
+    fi
+
+    log_info "Installing bot command listener..."
+
+    # Copy the listener script
+    if [[ -f "$SCRIPT_DIR/telegram-bot-listener.py" ]]; then
+        cp "$SCRIPT_DIR/telegram-bot-listener.py" "$INTEGRATIONS_DIR/telegram-bot-listener.py"
+        chmod 750 "$INTEGRATIONS_DIR/telegram-bot-listener.py"
+        chown root:root "$INTEGRATIONS_DIR/telegram-bot-listener.py"
+        log_success "Bot listener script installed"
+    else
+        log_warn "Bot listener script not found, skipping"
+        return 0
+    fi
+
+    # Create credentials config file
+    log_info "Creating credentials configuration..."
+    cat > "$CONFIG_DIR/telegram-credentials.conf" << EOF
+{
+  "bot_token": "${BOT_TOKEN}",
+  "chat_ids": ["${CHAT_ID}"]
+}
+EOF
+    chmod 600 "$CONFIG_DIR/telegram-credentials.conf"
+    log_success "Credentials saved to $CONFIG_DIR/telegram-credentials.conf"
+
+    # Create initial telegram.conf with default settings
+    log_info "Creating dynamic configuration..."
+    cat > "$CONFIG_DIR/telegram.conf" << EOF
+{
+  "level": ${ALERT_LEVEL},
+  "muted": false,
+  "muted_until": null,
+  "last_updated": "$(date -Iseconds)",
+  "updated_by": "setup-script"
+}
+EOF
+    chmod 644 "$CONFIG_DIR/telegram.conf"
+    log_success "Dynamic config saved to $CONFIG_DIR/telegram.conf"
+
+    # Install systemd service
+    if [[ -f "$SCRIPT_DIR/wazuh-telegram-bot.service" ]]; then
+        log_info "Installing systemd service..."
+        cp "$SCRIPT_DIR/wazuh-telegram-bot.service" /etc/systemd/system/
+        systemctl daemon-reload
+        systemctl enable wazuh-telegram-bot
+        systemctl start wazuh-telegram-bot
+
+        sleep 2
+        if systemctl is-active --quiet wazuh-telegram-bot; then
+            log_success "Bot listener service started"
+        else
+            log_warn "Bot listener service failed to start"
+            log_warn "Check: journalctl -u wazuh-telegram-bot"
+        fi
+    else
+        log_warn "Service file not found, skipping systemd setup"
+    fi
+}
+
 configure_ossec() {
     log_info "Configuring ossec.conf..."
+
+    # Use level 1 in ossec.conf to let the script handle filtering
+    # This allows dynamic level changes without restarting Wazuh
+    local ossec_level=1
+    if ! $INSTALL_LISTENER; then
+        # If no listener, use the actual level in ossec.conf
+        ossec_level=$ALERT_LEVEL
+    fi
 
     # Check if integration already exists
     if grep -q "custom-telegram" "$OSSEC_CONF" 2>/dev/null; then
@@ -200,7 +292,7 @@ PYEOF
   <integration>
     <name>custom-telegram.py</name>
     <hook_url>${BOT_TOKEN}:${CHAT_ID}</hook_url>
-    <level>${ALERT_LEVEL}</level>
+    <level>${ossec_level}</level>
     <alert_format>json</alert_format>
   </integration>"
 
@@ -240,14 +332,43 @@ restart_wazuh() {
     fi
 }
 
+print_summary() {
+    echo ""
+    echo -e "${GREEN}════════════════════════════════════════════════════════════${NC}"
+    echo -e "${GREEN}  Telegram Integration Complete!${NC}"
+    echo -e "${GREEN}════════════════════════════════════════════════════════════${NC}"
+    echo ""
+    echo "You will receive Telegram notifications for alerts level $ALERT_LEVEL and above."
+    echo ""
+
+    if $INSTALL_LISTENER; then
+        echo -e "${YELLOW}Bot Commands Available:${NC}"
+        echo "  /level <N>  - Set minimum alert level (1-15)"
+        echo "  /level      - Show current level"
+        echo "  /mute       - Mute all alerts"
+        echo "  /mute <min> - Mute for N minutes"
+        echo "  /unmute     - Resume alerts"
+        echo "  /status     - Show current configuration"
+        echo "  /help       - Show all commands"
+        echo ""
+        echo "Service status: systemctl status wazuh-telegram-bot"
+        echo ""
+    fi
+
+    echo "Test by generating an alert:"
+    echo "  logger -t security 'Authentication failure for user test'"
+    echo ""
+}
+
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
-        -t|--token)     BOT_TOKEN="$2"; shift 2 ;;
-        -c|--chat-id)   CHAT_ID="$2"; shift 2 ;;
-        -l|--level)     ALERT_LEVEL="$2"; shift 2 ;;
-        -h|--help)      show_help ;;
-        *)              shift ;;
+        -t|--token)       BOT_TOKEN="$2"; shift 2 ;;
+        -c|--chat-id)     CHAT_ID="$2"; shift 2 ;;
+        -l|--level)       ALERT_LEVEL="$2"; shift 2 ;;
+        --no-listener)    INSTALL_LISTENER=false; shift ;;
+        -h|--help)        show_help ;;
+        *)                shift ;;
     esac
 done
 
@@ -264,9 +385,10 @@ fi
 echo ""
 echo -e "${YELLOW}Configuration Summary${NC}"
 echo "─────────────────────────────────────────────────────────"
-echo -e "  Bot Token:    ${GREEN}${BOT_TOKEN:0:10}...${NC}"
-echo -e "  Chat ID:      ${GREEN}$CHAT_ID${NC}"
-echo -e "  Alert Level:  ${GREEN}$ALERT_LEVEL+${NC}"
+echo -e "  Bot Token:     ${GREEN}${BOT_TOKEN:0:10}...${NC}"
+echo -e "  Chat ID:       ${GREEN}$CHAT_ID${NC}"
+echo -e "  Alert Level:   ${GREEN}$ALERT_LEVEL+${NC}"
+echo -e "  Bot Listener:  ${GREEN}$(if $INSTALL_LISTENER; then echo 'Yes'; else echo 'No'; fi)${NC}"
 echo ""
 
 read -p "Proceed with installation? [Y/n]: " confirm
@@ -280,16 +402,8 @@ test_telegram || exit 1
 
 echo ""
 install_integration
+install_bot_listener
 configure_ossec
 restart_wazuh
 
-echo ""
-echo -e "${GREEN}════════════════════════════════════════════════════════════${NC}"
-echo -e "${GREEN}  Telegram Integration Complete!${NC}"
-echo -e "${GREEN}════════════════════════════════════════════════════════════${NC}"
-echo ""
-echo "You will receive Telegram notifications for alerts level $ALERT_LEVEL and above."
-echo ""
-echo "Test by generating an alert:"
-echo "  logger -t security 'Authentication failure for user test'"
-echo ""
+print_summary

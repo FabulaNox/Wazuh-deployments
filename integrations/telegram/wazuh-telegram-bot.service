@@ -1,0 +1,28 @@
+[Unit]
+Description=Wazuh Telegram Bot Listener
+Documentation=https://github.com/FabulaNox/Wazuh-deployments
+After=network.target wazuh-manager.service
+Wants=wazuh-manager.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+ExecStart=/usr/bin/python3 /var/ossec/integrations/telegram-bot-listener.py
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Environment file for credentials (optional)
+EnvironmentFile=-/var/ossec/etc/telegram-bot.env
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/ossec/etc
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
