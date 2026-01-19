@@ -1,0 +1,25 @@
+[Unit]
+Description=Wazuh Slack Bot Listener
+Documentation=https://github.com/FabulaNox/Wazuh-deployments
+After=network.target wazuh-manager.service
+Wants=wazuh-manager.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+ExecStart=/usr/bin/python3 /var/ossec/integrations/slack-bot-listener.py
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/ossec/etc
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

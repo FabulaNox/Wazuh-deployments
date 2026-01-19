@@ -137,3 +137,33 @@ resource "null_resource" "telegram_integration" {
     EOT
   }
 }
+
+# Slack Integration (optional)
+resource "null_resource" "slack_integration" {
+  count      = var.slack_integration_enabled ? 1 : 0
+  depends_on = [null_resource.wazuh_all_in_one]
+
+  triggers = {
+    channel_id  = var.slack_channel_id
+    alert_level = var.slack_alert_level
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      SCRIPT_PATH="${path.module}/../../integrations/slack/setup-slack-integration.sh"
+
+      if [[ ! -f "$SCRIPT_PATH" ]]; then
+        echo "ERROR: Slack integration script not found at $SCRIPT_PATH"
+        exit 1
+      fi
+
+      chmod +x "$SCRIPT_PATH"
+
+      sudo bash "$SCRIPT_PATH" \
+        --bot-token "${var.slack_bot_token}" \
+        --app-token "${var.slack_app_token}" \
+        --channel "${var.slack_channel_id}" \
+        --level "${var.slack_alert_level}" <<< "Y"
+    EOT
+  }
+}

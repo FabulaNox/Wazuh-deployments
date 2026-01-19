@@ -1,0 +1,25 @@
+display_information:
+  name: Wazuh Alerts
+  description: Security alert notifications from Wazuh SIEM
+  background_color: "#1a1c2c"
+
+features:
+  bot_user:
+    display_name: Wazuh
+    always_online: true
+  slash_commands:
+    - command: /wazuh
+      description: Manage Wazuh alert settings
+      usage_hint: "level [1-15] | mute [minutes] | unmute | status | help"
+      should_escape: false
+
+oauth_config:
+  scopes:
+    bot:
+      - chat:write
+      - commands
+
+settings:
+  socket_mode_enabled: true
+  org_deploy_enabled: false
+  token_rotation_enabled: false

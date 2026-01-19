@@ -67,3 +67,36 @@ variable "telegram_alert_level" {
   type        = number
   default     = 7
 }
+
+# Slack Integration Variables
+variable "slack_integration_enabled" {
+  description = "Enable Slack alert notifications"
+  type        = bool
+  default     = false
+}
+
+variable "slack_bot_token" {
+  description = "Slack Bot User OAuth Token (xoxb-...)"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "slack_app_token" {
+  description = "Slack App-Level Token for Socket Mode (xapp-...)"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "slack_channel_id" {
+  description = "Slack Channel ID (C...) or channel name"
+  type        = string
+  default     = ""
+}
+
+variable "slack_alert_level" {
+  description = "Minimum alert level to send to Slack (1-15)"
+  type        = number
+  default     = 7
+}
