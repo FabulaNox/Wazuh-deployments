@@ -176,28 +176,65 @@ systemctl stop wazuh-telegram-bot
 | `/var/ossec/etc/telegram-credentials.conf` | Bot token and allowed chat IDs |
 | `/var/ossec/integrations/custom-telegram.py` | Alert notification script |
 | `/var/ossec/integrations/telegram-bot-listener.py` | Command listener script |
+| `/tmp/telegram_integration.log` | Debug log for troubleshooting |
 
 ## Troubleshooting
 
+### Debug Logging
+
+The integration script writes detailed debug logs to `/tmp/telegram_integration.log`. This includes:
+- Invocation details (working directory, arguments, user/group IDs)
+- Configuration loading status
+- Alert level and threshold comparison
+- API request/response details
+- Any exceptions with full tracebacks
+
+**View debug logs:**
+```bash
+tail -f /tmp/telegram_integration.log
+```
+
+**Example debug output:**
+```
+=== Invocation ===
+CWD: /var/ossec
+Args: ['integrations/custom-telegram.py', '/tmp/custom-telegram.py-123.alert', '', 'TOKEN:CHAT_ID', ...]
+UID: 991, GID: 990
+requests imported OK
+Config: {'level': 8, 'muted': False, 'muted_until': None}
+Alert file: /tmp/custom-telegram.py-123.alert
+Alert level: 10
+Hook URL: TOKEN:CHAT_ID
+API URL: https://api.telegram.org/bot.../sendMessage, Chat ID: 123456
+Sending message...
+Response: 200 - {"ok":true,...}
+```
+
 ### Not receiving notifications
 
-1. **Check integration is loaded:**
+1. **Check debug logs first:**
+   ```bash
+   tail -50 /tmp/telegram_integration.log
+   ```
+   This will show exactly why messages aren't being sent (muted, below threshold, API errors, etc.)
+
+2. **Check integration is loaded:**
    ```bash
    grep -A5 "custom-telegram" /var/ossec/etc/ossec.conf
    ```
 
-2. **Check integration logs:**
+3. **Check Wazuh integration errors:**
    ```bash
-   tail -f /var/ossec/logs/integrations.log
+   grep -i telegram /var/ossec/logs/ossec.log | tail -20
    ```
 
-3. **Check current config:**
+4. **Check current config:**
    ```bash
    cat /var/ossec/etc/telegram.conf
    ```
    Verify `muted` is `false` and `level` is appropriate.
 
-4. **Test manually:**
+5. **Test manually:**
    ```bash
    curl -X POST "https://api.telegram.org/bot<TOKEN>/sendMessage" \
      -H "Content-Type: application/json" \
